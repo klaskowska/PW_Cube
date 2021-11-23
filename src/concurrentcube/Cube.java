@@ -146,10 +146,47 @@ public class Cube {
         }
     }
 
-    // rotates layer looking from side 1
-    // (without squares on side 1 and side 3)
+    // rotates layer looking from side 2
+    // (without squares on side 2 and side 4)
     private void rotatePerimeterLayer2(int layer) {
-        int[] columnTemp = copyColumn(1, size - 1 - layer);
-        rewriteRowToColumn();
+        int[] rowTemp = copyRow(0, size - 1 - layer);
+        rewriteColumnToRowConversely(1, 0, size - 1 - layer, size - 1 - layer);
+        rewriteRowToColumn(5, 1, layer, size - 1 - layer);
+        rewriteColumnToRowConversely(3, 5, layer, layer);
+        for (int row = 0; row < size; row++) {
+            squares[3][row][layer] = rowTemp[row];
+        }
+    }
+
+    // rotates layer looking from side 3
+    // (without squares on side 1 and side 3)
+    private void rotatePerimeterLayer3(int layer) {
+        int[] columnTemp = copyColumn(0, size - 1 - layer);
+        rewriteColumn(2, 0, size - 1 - layer, size - 1 - layer);
+        rewriteColumn(5, 2, size - 1 - layer, size - 1 - layer);
+        rewriteColumnConversely(4, 5, layer, size - 1 - layer);
+        for (int row = 0; row < size; row++) {
+            squares[4][row][layer] = columnTemp[size - 1 - row];
+        }
+    }
+
+    // rotates layer looking from side 4
+    // (without squares on side 2 and side 4)
+    private void rotatePerimeterLayer4(int layer) {
+        int[] columnTemp = copyColumn(3, size - 1 - layer);
+        rewriteRowToColumnConversely(5, 3, size - 1 - layer, size - 1 - layer);
+        rewriteColumnToRow(1, 5, layer, layer);
+        rewriteRowToColumnConversely(0, 1, layer, layer);
+        squares[0][layer] = columnTemp;
+    }
+
+    // rotates layer looking from side 5
+    // (without squares on side 0 and side 5)
+    private void rotatePerimeterLayer5(int layer) {
+        int[] rowTemp = copyRow(4, size - 1 - layer);
+        for (int side = 4; side > 1; side++) {
+            rewriteRow(side - 1, side, size - 1 - layer, size - 1 - layer);
+        }
+        squares[1][size - 1 - layer] = rowTemp;
     }
 }
