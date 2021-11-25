@@ -32,6 +32,17 @@ public class Cube {
         this.afterShowing = afterShowing;
     }
 
+    private int oppositeSide(int side) {
+        switch (side) {
+            case 0:
+                return 5;
+            case 5:
+                return 0;
+            default:
+                return (side + 1) % 4 + 1;
+        }
+    }
+
     private int[] copyRow(int side, int row) {
         int[] copy = new int[size];
         for (int column = 0; column < size; column++) {
@@ -128,8 +139,8 @@ public class Cube {
     // (without squares on side 0 and side 5)
     private void rotatePerimeterLayer0(int layer) {
         int[] rowTemp = copyRow(1, layer);
-        for (int i = 1; i < 4; i++) {
-            rewriteRow(i + 1, i, layer, layer);
+        for (int side = 1; side < 4; side++) {
+            rewriteRow(side + 1, side, layer, layer);
         }
         squares[4][layer] = rowTemp;
     }
@@ -184,9 +195,68 @@ public class Cube {
     // (without squares on side 0 and side 5)
     private void rotatePerimeterLayer5(int layer) {
         int[] rowTemp = copyRow(4, size - 1 - layer);
-        for (int side = 4; side > 1; side++) {
+        for (int side = 4; side > 1; side--) {
             rewriteRow(side - 1, side, size - 1 - layer, size - 1 - layer);
         }
         squares[1][size - 1 - layer] = rowTemp;
+    }
+
+    private void rotatePerimeterLayer(int side, int layer) {
+        switch (side) {
+            case 0:
+                rotatePerimeterLayer0(layer);
+                break;
+            case 1:
+                rotatePerimeterLayer1(layer);
+                break;
+            case 2:
+                rotatePerimeterLayer2(layer);
+                break;
+            case 3:
+                rotatePerimeterLayer3(layer);
+                break;
+            case 4:
+                rotatePerimeterLayer4(layer);
+                break;
+            case 5:
+                rotatePerimeterLayer5(layer);
+        }
+    }
+
+    public void rotate(int side, int layer) throws InterruptedException {
+        if (layer == 0) {
+            rightRotateSide(side);
+        }
+        else if (layer == size - 1) {
+            leftRotateSide(oppositeSide(side));
+        }
+
+        rotatePerimeterLayer(side, layer);
+    }
+
+    public String show() throws InterruptedException {
+        StringBuffer sb = new StringBuffer();
+        for (int side = 0; side < 6; side++) {
+            for (int row = 0; row < size; row++) {
+                for (int column = 0; column < size; column++) {
+                    sb.append(squares[side][row][column]);
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        var counter = new Object() { int value = 0; };
+        Cube cube = new Cube(4,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        cube.rotate(2, 0);
+        cube.rotate(5, 1);
+        System.out.println(cube.show());
     }
 }
