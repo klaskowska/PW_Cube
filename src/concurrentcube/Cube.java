@@ -1,6 +1,7 @@
 package concurrentcube;
 
 import java.util.Random;
+import java.util.concurrent.Semaphore;
 import java.util.function.BiConsumer;
 
 public class Cube {
@@ -11,6 +12,28 @@ public class Cube {
     private BiConsumer<Integer, Integer> afterRotation;
     private Runnable beforeShowing;
     private Runnable afterShowing;
+
+    // inform how many threads are waiting for operations:
+    // show() and rotate() on axis 0, 1 or 2;
+    // axis_i crosses side i
+    private int waitingPrinter = 0;
+    private int waitingAxis0 = 0;
+    private int waitingAxis1 = 0;
+    private int waitingAxis2 = 0;
+
+    // inform how many threads are executing operations
+    private int activePrinter = 0;
+    private int activeAxis0 = 0;
+    private int activeAxis1 = 0;
+    private int activeAxis2 = 0;
+
+    // give permits for executing operations
+    private final Semaphore printer = new Semaphore(0, true);
+    private final Semaphore axis0 = new Semaphore(0, true);
+    private final Semaphore axis1 = new Semaphore(0, true);
+    private final Semaphore axis2 = new Semaphore(0, true);
+
+    private final Semaphore mutex = new Semaphore(1, true);
 
     public Cube(int size,
                 BiConsumer<Integer, Integer> beforeRotation,
@@ -228,7 +251,7 @@ public class Cube {
         }
     }
 
-    public void rotate(int side, int layer) throws InterruptedException {
+    public void executeRotation(int side, int layer)  {
         if (layer == 0) {
             rightRotateSide(side);
         }
@@ -239,7 +262,130 @@ public class Cube {
         rotatePerimeterLayer(side, layer);
     }
 
-    public String show() throws InterruptedException {
+    // pomysl potem o zrobieniu tablicy na waitingi i na active'y zeby rotateAxis napisac tylko raz
+    public void rotateAxis0(int side, int layer) throws InterruptedException {
+        mutex.acquire();
+        if (waitingAxis1 + waitingAxis2 + waitingPrinter + activeAxis1 + activeAxis2 + activePrinter > 0) {
+            waitingAxis0++;
+            mutex.release();
+            axis0.acquire();
+            waitingAxis0--;
+        }
+        activeAxis0++;
+        if (waitingAxis0 > 0) {
+            axis0.release();
+        }
+        else {
+            mutex.release();
+        }
+        executeRotation(side, layer);
+        mutex.acquire();
+        activeAxis0--;
+        if (activeAxis0 == 0) {
+            if (waitingAxis1 > 0) {
+                axis0.release();
+            }
+            else if (waitingAxis2 > 0) {
+                axis1.release();
+            }
+            else if (waitingPrinter > 0) {
+                printer.release();
+            }
+            else {
+                mutex.release();
+            }
+        }
+        else {
+            mutex.release();
+        }
+    }
+
+    public void rotateAxis1(int side, int layer) throws InterruptedException {
+        mutex.acquire();
+        if (waitingAxis0 + waitingAxis2 + waitingPrinter + activeAxis0 + activeAxis2 + activePrinter > 0) {
+            waitingAxis1++;
+            mutex.release();
+            axis1.acquire();
+            waitingAxis1--;
+        }
+        activeAxis1++;
+        if (waitingAxis1 > 0) {
+            axis1.release();
+        }
+        else {
+            mutex.release();
+        }
+        executeRotation(side, layer);
+        mutex.acquire();
+        activeAxis1--;
+        if (activeAxis1 == 0) {
+            if (waitingAxis2 > 0) {
+                axis2.release();
+            }
+            else if (waitingPrinter > 0) {
+                printer.release();
+            }
+            else if (waitingAxis0 > 0) {
+                axis0.release();
+            }
+            else {
+                mutex.release();
+            }
+        }
+        else {
+            mutex.release();
+        }
+    }
+
+    public void rotateAxis2(int side, int layer) throws InterruptedException {
+        mutex.acquire();
+        if (waitingAxis1 + waitingAxis0 + waitingPrinter + activeAxis1 + activeAxis0 + activePrinter > 0) {
+            waitingAxis2++;
+            mutex.release();
+            axis2.acquire();
+            waitingAxis2--;
+        }
+        activeAxis2++;
+        if (waitingAxis2 > 0) {
+            axis2.release();
+        }
+        else {
+            mutex.release();
+        }
+        executeRotation(side, layer);
+        mutex.acquire();
+        activeAxis2--;
+        if (activeAxis2 == 0) {
+            if (waitingPrinter > 0) {
+                printer.release();
+            }
+            else if (waitingAxis0 > 0) {
+                axis0.release();
+            }
+            else if (waitingAxis1 > 0) {
+                axis1.release();
+            }
+            else {
+                mutex.release();
+            }
+        }
+        else {
+            mutex.release();
+        }
+    }
+
+    // waits till rotating is possible, then rotates the cube
+    public void rotate(int side, int layer) throws InterruptedException {
+        if (side == 0 || side == 5)
+            rotateAxis0(side, layer);
+        else if (side == 1 || side == 3)
+            rotateAxis1(side, layer);
+        else
+            rotateAxis2(side, layer);
+
+    }
+
+    public String executeShowing() {
         StringBuffer sb = new StringBuffer();
         for (int side = 0; side < 6; side++) {
             for (int row = 0; row < size; row++) {
@@ -251,9 +397,74 @@ public class Cube {
         return sb.toString();
     }
 
+    // waits till showing is possible, then shows the cube
+    public String show() throws InterruptedException {
+        mutex.acquire();
+        if (activeAxis0 + activeAxis1 + activeAxis2 + activePrinter > 0) {
+            waitingPrinter++;
+            mutex.release();
+            printer.acquire();
+            waitingPrinter--;
+        }
+        activePrinter++;
+        mutex.release();
+        String result = executeShowing();
+        mutex.acquire();
+        activePrinter--;
+        if (waitingAxis0 > 0) {
+            axis0.release();
+        }
+        else if (waitingAxis1 > 0) {
+            axis1.release();
+        }
+        else if (waitingAxis2 > 0) {
+            axis2.release();
+        }
+        else {
+            mutex.release();
+        }
+        return result;
+    }
+
+    private static class ExecutorRotate implements Runnable {
+        private Cube cube;
+        private int side;
+        private int layer;
+        public ExecutorRotate(Cube cube, int side, int layer) {
+            this.cube = cube;
+            this.side = side;
+            this.layer = layer;
+        }
+
+        @Override
+        public void run() {
+            try {
+                cube.rotate(side, layer);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static class ExecutorShow implements Runnable {
+        private Cube cube;
+
+        public ExecutorShow(Cube cube) {
+            this.cube = cube;
+        }
+        @Override
+        public void run() {
+            try {
+                cube.show();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public static void main(String[] args) throws InterruptedException {
         var counter = new Object() { int value = 0; };
-        int size = 400;
+        int size = 4000;
         Cube cube = new Cube(size,
                 (x, y) -> { ++counter.value; },
                 (x, y) -> { ++counter.value; },
@@ -268,24 +479,35 @@ public class Cube {
                 () -> { ++counter.value; }
         );
 
-        int trials = 100000;
+        int trials = 100;
         int[] randomSide = new int[trials];
         int[] randomLayer = new int[trials];
         Random r = new Random();
+        int side;
         for (int i = 0; i < trials; i++) {
-            randomSide[i] = r.nextInt(6);
+            randomSide[i] = r.nextInt(2);
             randomLayer[i] = r.nextInt(cube.size);
             //System.out.println("rotate(" + randomSide[i] + ", " + randomLayer[i] + ")\n");
-            cube.rotate(randomSide[i], randomLayer[i]);
+            if (randomLayer[i] == 0)
+                side = 1;
+            else
+                side = 3;
+            Thread t = new Thread(new ExecutorRotate(cube, side, randomLayer[i]));
         }
         for (int i = trials - 1; i >= 0; i--) {
+            if (randomLayer[i] == 0)
+                side = 1;
+            else
+                side = 3;
+            Thread t = new Thread(new ExecutorRotate(cube, cube.oppositeSide(side), cube.size - 1 - randomLayer[i]));
             //System.out.println("rotate(" + cube.oppositeSide(randomSide[i]) + ", " + (cube.size - 1 - randomLayer[i]) + ")\n");
-            cube.rotate(cube.oppositeSide(randomSide[i]), cube.size - 1 - randomLayer[i]);
         }
         String cubeString = cube.show();
         String cubePerfectString = cubePerfect.show();
+
         if (cubeString.equals(cubePerfectString)) {
             System.out.println("ok");
         }
+
     }
 }
