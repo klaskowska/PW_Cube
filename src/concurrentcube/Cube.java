@@ -1,5 +1,6 @@
 package concurrentcube;
 
+import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.Semaphore;
 import java.util.function.BiConsumer;
@@ -278,7 +279,9 @@ public class Cube {
         else {
             mutex.release();
         }
+        beforeRotation.accept(side, layer);
         executeRotation(side, layer);
+        afterRotation.accept(side, layer);
         mutex.acquire();
         activeAxis0--;
         if (activeAxis0 == 0) {
@@ -315,7 +318,9 @@ public class Cube {
         else {
             mutex.release();
         }
+        beforeRotation.accept(side, layer);
         executeRotation(side, layer);
+        afterRotation.accept(side, layer);
         mutex.acquire();
         activeAxis1--;
         if (activeAxis1 == 0) {
@@ -352,7 +357,9 @@ public class Cube {
         else {
             mutex.release();
         }
+        beforeRotation.accept(side, layer);
         executeRotation(side, layer);
+        afterRotation.accept(side, layer);
         mutex.acquire();
         activeAxis2--;
         if (activeAxis2 == 0) {
@@ -376,6 +383,7 @@ public class Cube {
 
     // waits till rotating is possible, then rotates the cube
     public void rotate(int side, int layer) throws InterruptedException {
+        System.out.println("siem");
         if (side == 0 || side == 5)
             rotateAxis0(side, layer);
         else if (side == 1 || side == 3)
@@ -408,7 +416,9 @@ public class Cube {
         }
         activePrinter++;
         mutex.release();
+        beforeShowing.run();
         String result = executeShowing();
+        afterShowing.run();
         mutex.acquire();
         activePrinter--;
         if (waitingAxis0 > 0) {
@@ -448,23 +458,43 @@ public class Cube {
 
     private static class ExecutorShow implements Runnable {
         private Cube cube;
+        private ObjectString result;
 
-        public ExecutorShow(Cube cube) {
+        public ExecutorShow(Cube cube, ObjectString result) {
             this.cube = cube;
         }
         @Override
         public void run() {
             try {
-                cube.show();
+                System.out.println("hello");
+                String st = cube.show();
+                //result.setS(st);
+                System.out.println(st);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+        }
+
+        public String getResult() {
+            return result.getS();
+        }
+    }
+
+    private static class ObjectString {
+        private String s;
+
+        public void setS(String s) {
+            this.s = s;
+        }
+
+        public String getS() {
+            return s;
         }
     }
 
     public static void main(String[] args) throws InterruptedException {
         var counter = new Object() { int value = 0; };
-        int size = 4000;
+        int size = 4;
         Cube cube = new Cube(size,
                 (x, y) -> { ++counter.value; },
                 (x, y) -> { ++counter.value; },
@@ -479,7 +509,10 @@ public class Cube {
                 () -> { ++counter.value; }
         );
 
-        int trials = 100;
+        ArrayList<Thread> threadList = new ArrayList<>();
+        ArrayList<Thread> threadList1 = new ArrayList<>();
+        ArrayList<ObjectString> resultList = new ArrayList<>();
+        int trials = 10;
         int[] randomSide = new int[trials];
         int[] randomLayer = new int[trials];
         Random r = new Random();
@@ -489,19 +522,38 @@ public class Cube {
             randomLayer[i] = r.nextInt(cube.size);
             //System.out.println("rotate(" + randomSide[i] + ", " + randomLayer[i] + ")\n");
             if (randomLayer[i] == 0)
-                side = 1;
+                side = 0;
             else
-                side = 3;
+                side = 5;
             Thread t = new Thread(new ExecutorRotate(cube, side, randomLayer[i]));
+            t.start();
+            threadList.add(t);
+
+            ObjectString result = new ObjectString();
+            Runnable runnable = new ExecutorShow(cube, result);
+            resultList.add(result);
+            Thread t1 = new Thread(runnable);
+            t1.start();
+            threadList.add(t1);
         }
         for (int i = trials - 1; i >= 0; i--) {
             if (randomLayer[i] == 0)
-                side = 1;
+                side = 0;
             else
-                side = 3;
+                side = 5;
             Thread t = new Thread(new ExecutorRotate(cube, cube.oppositeSide(side), cube.size - 1 - randomLayer[i]));
+            t.start();
+            threadList.add(t);
             //System.out.println("rotate(" + cube.oppositeSide(randomSide[i]) + ", " + (cube.size - 1 - randomLayer[i]) + ")\n");
         }
+
+        for (Thread t : threadList) {
+            t.join();
+        }
+        for (ObjectString o : resultList) {
+            System.out.println(o.getS());
+        }
+
         String cubeString = cube.show();
         String cubePerfectString = cubePerfect.show();
 
