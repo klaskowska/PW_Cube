@@ -1,5 +1,6 @@
 package concurrentcube;
 
+import java.util.Random;
 import java.util.function.BiConsumer;
 
 public class Cube {
@@ -30,6 +31,10 @@ public class Cube {
         this.afterRotation = afterRotation;
         this.beforeShowing = beforeShowing;
         this.afterShowing = afterShowing;
+    }
+
+    public int getSize() {
+        return size;
     }
 
     private int oppositeSide(int side) {
@@ -186,7 +191,7 @@ public class Cube {
     private void rotatePerimeterLayer4(int layer) {
         int[] columnTemp = copyColumn(3, size - 1 - layer);
         rewriteRowToColumnConversely(5, 3, size - 1 - layer, size - 1 - layer);
-        rewriteColumnToRow(1, 5, layer, layer);
+        rewriteColumnToRow(1, 5, layer, size - 1 - layer);
         rewriteRowToColumnConversely(0, 1, layer, layer);
         squares[0][layer] = columnTemp;
     }
@@ -248,15 +253,39 @@ public class Cube {
 
     public static void main(String[] args) throws InterruptedException {
         var counter = new Object() { int value = 0; };
-        Cube cube = new Cube(4,
+        int size = 400;
+        Cube cube = new Cube(size,
                 (x, y) -> { ++counter.value; },
                 (x, y) -> { ++counter.value; },
                 () -> { ++counter.value; },
                 () -> { ++counter.value; }
         );
 
-        cube.rotate(2, 0);
-        cube.rotate(5, 1);
-        System.out.println(cube.show());
+        Cube cubePerfect = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        int trials = 100000;
+        int[] randomSide = new int[trials];
+        int[] randomLayer = new int[trials];
+        Random r = new Random();
+        for (int i = 0; i < trials; i++) {
+            randomSide[i] = r.nextInt(6);
+            randomLayer[i] = r.nextInt(cube.size);
+            //System.out.println("rotate(" + randomSide[i] + ", " + randomLayer[i] + ")\n");
+            cube.rotate(randomSide[i], randomLayer[i]);
+        }
+        for (int i = trials - 1; i >= 0; i--) {
+            //System.out.println("rotate(" + cube.oppositeSide(randomSide[i]) + ", " + (cube.size - 1 - randomLayer[i]) + ")\n");
+            cube.rotate(cube.oppositeSide(randomSide[i]), cube.size - 1 - randomLayer[i]);
+        }
+        String cubeString = cube.show();
+        String cubePerfectString = cubePerfect.show();
+        if (cubeString.equals(cubePerfectString)) {
+            System.out.println("ok");
+        }
     }
 }
