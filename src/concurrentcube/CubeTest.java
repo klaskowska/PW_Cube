@@ -1,9 +1,7 @@
 package concurrentcube;
 
-
-import static org.junit.Assert.*;
-
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Random;
@@ -70,6 +68,8 @@ public class CubeTest {
         }
     }
 
+    // rotates and then rotates conversely using one thread
+    // checks if result is like at the beginning
     @Test
     public void testSequentially() throws InterruptedException {
         var counter = new Object() { int value = 0; };
@@ -107,12 +107,17 @@ public class CubeTest {
         assertEquals(cubeString, cubePerfectString);
     }
 
-    // rotates only on one axis and then rotates conversely
+    // rotates only on axis0 and then rotates conversely (also executes show())
+    // using more than one thread
+    // checks if result is like at the beginning
     @Test
-    public void testConcurrent() throws InterruptedException {
-        ExecutorService executor = Executors.newFixedThreadPool(8);
-        var counter = new Object() { int value = 0; };
+    public void testConcurrentAxis0() throws InterruptedException {
+        int trials = 100;
         int size = 40;
+        int threads = 8;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        var counter = new Object() { int value = 0; };
+
         Cube cube = new Cube(size,
                 (x, y) -> { ++counter.value; },
                 (x, y) -> { ++counter.value; },
@@ -127,8 +132,6 @@ public class CubeTest {
                 () -> { ++counter.value; }
         );
 
-        ArrayList<Thread> threadList = new ArrayList<>();
-        int trials = 100;
         int[] randomSide = new int[trials];
         int[] randomLayer = new int[trials];
         Random r = new Random();
@@ -182,4 +185,219 @@ public class CubeTest {
         String cubePerfectString = cubePerfect.show();
         assertEquals(cubeString, cubePerfectString);
     }
+
+    // rotates only on axis1 and then rotates conversely (also executes show())
+    // using more than one thread
+    // checks if result is like at the beginning
+    @Test
+    public void testConcurrentAxis1() throws InterruptedException {
+        int trials = 100;
+        int size = 40;
+        int threads = 8;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        var counter = new Object() { int value = 0; };
+
+        Cube cube = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        Cube cubePerfect = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        int[] randomSide = new int[trials];
+        int[] randomLayer = new int[trials];
+        Random r = new Random();
+        int side;
+        for (int i = 0; i < trials; i++) {
+            randomSide[i] = r.nextInt(2);
+            randomLayer[i] = r.nextInt(cube.getSize());
+            if (randomLayer[i] == 0)
+                side = 1;
+            else
+                side = 3;
+            int finalSide = side;
+            int finalI = i;
+            executor.execute(() -> {
+                try {
+                    cube.rotate(finalSide, randomLayer[finalI]);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+
+            executor.execute(() -> {
+                try {
+                    cube.show();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+        for (int i = trials - 1; i >= 0; i--) {
+            if (randomLayer[i] == 0)
+                side = 1;
+            else
+                side = 3;
+            int finalSide1 = side;
+            int finalI = i;
+            executor.execute(() -> {
+                try {
+                    cube.rotate(cube.oppositeSide(finalSide1), cube.getSize() - 1 - randomLayer[finalI]);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        executor.shutdown();
+
+        executor.awaitTermination(20, TimeUnit.SECONDS);
+
+        String cubeString = cube.show();
+        String cubePerfectString = cubePerfect.show();
+        assertEquals(cubeString, cubePerfectString);
+    }
+
+    // rotates only on axis2 and then rotates conversely (also executes show())
+    // using more than one thread
+    // checks if result is like at the beginning
+    @Test
+    public void testConcurrentAxis2() throws InterruptedException {
+        int trials = 100;
+        int size = 40;
+        int threads = 8;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        var counter = new Object() { int value = 0; };
+
+        Cube cube = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        Cube cubePerfect = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        int[] randomSide = new int[trials];
+        int[] randomLayer = new int[trials];
+        Random r = new Random();
+        int side;
+        for (int i = 0; i < trials; i++) {
+            randomSide[i] = r.nextInt(2);
+            randomLayer[i] = r.nextInt(cube.getSize());
+            if (randomLayer[i] == 0)
+                side = 2;
+            else
+                side = 4;
+            int finalSide = side;
+            int finalI = i;
+            executor.execute(() -> {
+                try {
+                    cube.rotate(finalSide, randomLayer[finalI]);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+
+            executor.execute(() -> {
+                try {
+                    cube.show();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+        for (int i = trials - 1; i >= 0; i--) {
+            if (randomLayer[i] == 0)
+                side = 2;
+            else
+                side = 4;
+            int finalSide1 = side;
+            int finalI = i;
+            executor.execute(() -> {
+                try {
+                    cube.rotate(cube.oppositeSide(finalSide1), cube.getSize() - 1 - randomLayer[finalI]);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+
+        executor.shutdown();
+
+        executor.awaitTermination(20, TimeUnit.SECONDS);
+
+        String cubeString = cube.show();
+        String cubePerfectString = cubePerfect.show();
+        assertEquals(cubeString, cubePerfectString);
+    }
+
+    @Test
+    public void testFastness1() throws InterruptedException {
+        int trials = 10000;
+        int size = 4000;
+        var counter = new Object() { int value = 0; };
+
+        Cube cube = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        for (int i = 0; i < trials; i++) {
+            int finalI = i;
+            cube.rotate(finalI % 6, finalI % size);
+        }
+    }
+
+    // checks if operations on cube are executing concurrently:
+    // executing time should be less than executing time sequentially
+    // (I've picked constants - sequentially it takes about 8 sec)
+    @Test
+    public void testFastness() throws InterruptedException {
+        long startTime = System.nanoTime();
+
+        int trials = 10000;
+        int size = 4000;
+        int threads = 25;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        var counter = new Object() { int value = 0; };
+
+        Cube cube = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        for (int i = 0; i < trials; i++) {
+            int finalI = i;
+            executor.execute(() -> {
+                try {
+                    cube.rotate(finalI % 6, finalI % size);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+        executor.shutdown();
+        executor.awaitTermination(20, TimeUnit.SECONDS);
+
+        long endTime = System.nanoTime();
+        assert(((endTime - startTime) / 1000000) < 5000);
+    }
+
 }
