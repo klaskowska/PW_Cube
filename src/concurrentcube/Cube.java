@@ -366,21 +366,14 @@ public class Cube {
         mutex.acquire();
         activeGroup[3]--;
 
-        int i = 0;
         if (waitingGroup[0] > 0) {
-            while (i < size && waitingLayer[0][i] == 0)
-                i++;
-            layerRotate[0][i].release();
+            releaseGroup(0);
         }
         else if (waitingGroup[1] > 0) {
-            while (i < size && waitingLayer[1][i] == 0)
-                i++;
-            layerRotate[1][i].release();
+            releaseGroup(1);
         }
         else if (waitingGroup[2] > 0) {
-            while (i < size && waitingLayer[2][i] == 0)
-                i++;
-            layerRotate[2][i].release();
+            releaseGroup(2);
         }
         else if (waitingGroup[3] > 0) {
             releaseGroup(3);
