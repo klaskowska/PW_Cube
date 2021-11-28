@@ -287,51 +287,56 @@ public class Cube {
         int uniqueSide = side < 3 ? side : oppositeSide(side);
         int uniqueLayer = side < 3 ? layer : size - 1 - layer;
 
-        mutex.acquire();
-        if (waitingGroup[(uniqueSide + 1) % 4] > 0 || waitingGroup[(uniqueSide + 2) % 4] > 0 ||
-                waitingGroup[(uniqueSide + 3) % 4] > 0 || activeGroup[(uniqueSide + 1) % 4] > 0 ||
-                activeGroup[(uniqueSide + 2) % 4] > 0 || activeGroup[(uniqueSide + 3) % 4] > 0 ||
-                activeLayer[uniqueSide][uniqueLayer] > 0) {
-            waitingGroup[uniqueSide]++;
-            waitingLayer[uniqueSide][uniqueLayer]++;
-            mutex.release();
-            layerRotate[uniqueSide][uniqueLayer].acquire();
-            waitingGroup[uniqueSide]--;
-            waitingLayer[uniqueSide][uniqueLayer]--;
-        }
+        mutex.acquireUninterruptibly();
+        if (!Thread.currentThread().isInterrupted()) {
+            if (waitingGroup[(uniqueSide + 1) % 4] > 0 || waitingGroup[(uniqueSide + 2) % 4] > 0 ||
+                    waitingGroup[(uniqueSide + 3) % 4] > 0 || activeGroup[(uniqueSide + 1) % 4] > 0 ||
+                    activeGroup[(uniqueSide + 2) % 4] > 0 || activeGroup[(uniqueSide + 3) % 4] > 0 ||
+                    activeLayer[uniqueSide][uniqueLayer] > 0) {
+                waitingGroup[uniqueSide]++;
+                waitingLayer[uniqueSide][uniqueLayer]++;
+                mutex.release();
+                try {
+                    layerRotate[uniqueSide][uniqueLayer].acquire();
+                } finally {
+                    waitingGroup[uniqueSide]--;
+                    waitingLayer[uniqueSide][uniqueLayer]--;
+                }
+            }
 
-        activeLayer[uniqueSide][uniqueLayer]++;
-        activeGroup[uniqueSide]++;
-        int i = 0;
-        while (i < size && (activeLayer[uniqueSide][i] > 0 || waitingLayer[uniqueSide][i] == 0))
-            i++;
-        if (i != size)
-            layerRotate[uniqueSide][i].release();
-        else
-            mutex.release();
-
-        beforeRotation.accept(side, layer);
-        executeRotation(side, layer);
-        afterRotation.accept(side, layer);
-
-        mutex.acquire();
-        activeGroup[uniqueSide]--;
-        activeLayer[uniqueSide][uniqueLayer]--;
-
-        if (activeGroup[uniqueSide] == 0) {
-            if (waitingGroup[(uniqueSide + 1) % 4] > 0)
-                releaseGroup((uniqueSide + 1) % 4);
-            else if (waitingGroup[(uniqueSide + 2) % 4] > 0)
-                releaseGroup((uniqueSide + 2) % 4);
-            else if (waitingGroup[(uniqueSide + 3) % 4] > 0)
-                releaseGroup((uniqueSide + 3) % 4);
-            else if (waitingGroup[uniqueSide] > 0)
-                releaseGroup(uniqueSide);
+            activeLayer[uniqueSide][uniqueLayer]++;
+            activeGroup[uniqueSide]++;
+            int i = 0;
+            while (i < size && (activeLayer[uniqueSide][i] > 0 || waitingLayer[uniqueSide][i] == 0))
+                i++;
+            if (i != size)
+                layerRotate[uniqueSide][i].release();
             else
                 mutex.release();
-        }
-        else {
-            mutex.release();
+
+            beforeRotation.accept(side, layer);
+            executeRotation(side, layer);
+            afterRotation.accept(side, layer);
+
+            mutex.acquireUninterruptibly();
+            activeGroup[uniqueSide]--;
+            activeLayer[uniqueSide][uniqueLayer]--;
+            if (!Thread.currentThread().isInterrupted()) {
+                if (activeGroup[uniqueSide] == 0) {
+                    if (waitingGroup[(uniqueSide + 1) % 4] > 0)
+                        releaseGroup((uniqueSide + 1) % 4);
+                    else if (waitingGroup[(uniqueSide + 2) % 4] > 0)
+                        releaseGroup((uniqueSide + 2) % 4);
+                    else if (waitingGroup[(uniqueSide + 3) % 4] > 0)
+                        releaseGroup((uniqueSide + 3) % 4);
+                    else if (waitingGroup[uniqueSide] > 0)
+                        releaseGroup(uniqueSide);
+                    else
+                        mutex.release();
+                } else {
+                    mutex.release();
+                }
+            }
         }
     }
 
@@ -349,38 +354,47 @@ public class Cube {
 
     // waits till showing is possible, then shows the cube
     public String show() throws InterruptedException {
-        mutex.acquire();
-        if (activeGroup[0] > 0 || activeGroup[1] > 0 || activeGroup[2] > 0 || activeGroup[3] > 0) {
-            waitingGroup[3]++;
+        mutex.acquireUninterruptibly();
+        if (!Thread.currentThread().isInterrupted()) {
+            if (activeGroup[0] > 0 || activeGroup[1] > 0 || activeGroup[2] > 0 || activeGroup[3] > 0) {
+                waitingGroup[3]++;
+                mutex.release();
+                try {
+                    printer.acquire();
+                } finally {
+                    waitingGroup[3]--;
+                }
+            }
+            activeGroup[3]++;
             mutex.release();
-            printer.acquire();
-            waitingGroup[3]--;
-        }
-        activeGroup[3]++;
-        mutex.release();
 
-        beforeShowing.run();
-        String result = executeShowing();
-        afterShowing.run();
+            beforeShowing.run();
+            String result = executeShowing();
+            afterShowing.run();
 
-        mutex.acquire();
-        activeGroup[3]--;
+            mutex.acquireUninterruptibly();
+            activeGroup[3]--;
 
-        if (waitingGroup[0] > 0) {
-            releaseGroup(0);
-        }
-        else if (waitingGroup[1] > 0) {
-            releaseGroup(1);
-        }
-        else if (waitingGroup[2] > 0) {
-            releaseGroup(2);
-        }
-        else if (waitingGroup[3] > 0) {
-            releaseGroup(3);
+            if (!Thread.currentThread().isInterrupted()) {
+                if (waitingGroup[0] > 0) {
+                    releaseGroup(0);
+                } else if (waitingGroup[1] > 0) {
+                    releaseGroup(1);
+                } else if (waitingGroup[2] > 0) {
+                    releaseGroup(2);
+                } else if (waitingGroup[3] > 0) {
+                    releaseGroup(3);
+                } else {
+                    mutex.release();
+                }
+                return result;
+            }
+            else {
+                throw new InterruptedException();
+            }
         }
         else {
-            mutex.release();
+            throw new InterruptedException();
         }
-        return result;
     }
 }

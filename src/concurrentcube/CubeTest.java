@@ -11,62 +11,6 @@ import java.util.concurrent.TimeUnit;
 
 public class CubeTest {
 
-    private static class ExecutorRotate implements Runnable {
-        private Cube cube;
-        private int side;
-        private int layer;
-        public ExecutorRotate(Cube cube, int side, int layer) {
-            this.cube = cube;
-            this.side = side;
-            this.layer = layer;
-        }
-
-        @Override
-        public void run() {
-            try {
-                cube.rotate(side, layer);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private static class ExecutorShow implements Runnable {
-        private Cube cube;
-        private ObjectString result;
-
-        public ExecutorShow(Cube cube, ObjectString result) {
-            this.cube = cube;
-        }
-        @Override
-        public void run() {
-            try {
-                System.out.println("hello");
-                String st = cube.show();
-                //result.setS(st);
-                System.out.println(st);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        public String getResult() {
-            return result.getS();
-        }
-    }
-
-    private static class ObjectString {
-        private String s;
-
-        public void setS(String s) {
-            this.s = s;
-        }
-
-        public String getS() {
-            return s;
-        }
-    }
-
     // rotates and then rotates conversely using one thread
     // checks if result is like at the beginning
     @Test
@@ -343,15 +287,91 @@ public class CubeTest {
         assertEquals(cubeString, cubePerfectString);
     }
 
-    // checks if operations on cube are executing concurrently:
+    // checks if operations on cube are executing concurrently (on axis0):
     // executing time should be less than executing time sequentially
-    // (I've picked constants - sequentially it takes about 8 sec)
+    // (I've picked constants - sequentially it takes about 7.5 sec)
     @Test
-    public void testFastness() throws InterruptedException {
+    public void testFastnessAxis0() throws InterruptedException {
+        long startTime = System.nanoTime();
+
+        int trials = 30000;
+        int size = 5000;
+        int threads = 100;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        var counter = new Object() { int value = 0; };
+
+        Cube cube = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        for (int i = 0; i < trials; i++) {
+            int layer = i % size;
+            int side = i % 2 == 0 ? 0 : 5;
+            executor.execute(() -> {
+                try {
+                    cube.rotate(side, layer);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+        executor.shutdown();
+        executor.awaitTermination(20, TimeUnit.SECONDS);
+
+        long endTime = System.nanoTime();
+        assert(((endTime - startTime) / 1000000) < 7000);
+    }
+
+    // checks if operations on cube are executing concurrently (on axis1):
+    // executing time should be less than executing time sequentially
+    // (I've picked constants - sequentially it takes about 12 sec)
+    @Test
+    public void testFastnessAxis1() throws InterruptedException {
         long startTime = System.nanoTime();
 
         int trials = 10000;
         int size = 4000;
+        int threads = 50;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        var counter = new Object() { int value = 0; };
+
+        Cube cube = new Cube(size,
+                (x, y) -> { ++counter.value; },
+                (x, y) -> { ++counter.value; },
+                () -> { ++counter.value; },
+                () -> { ++counter.value; }
+        );
+
+        for (int i = 0; i < trials; i++) {
+            int layer = i % size;
+            int side = i % 2 == 0 ? 1 : 3;
+            executor.execute(() -> {
+                try {
+                    cube.rotate(side, layer);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
+        executor.shutdown();
+        executor.awaitTermination(20, TimeUnit.SECONDS);
+
+        long endTime = System.nanoTime();
+        assert(((endTime - startTime) / 1000000) < 10000);
+    }
+
+    // checks if operations on cube are executing concurrently (on axis2):
+    // executing time should be less than executing time sequentially
+    // (I've picked constants - sequentially it takes about 9 sec)
+    @Test
+    public void testFastnessAxis2() throws InterruptedException {
+        long startTime = System.nanoTime();
+
+        int trials = 100000;
+        int size = 1600;
         int threads = 25;
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         var counter = new Object() { int value = 0; };
@@ -364,10 +384,11 @@ public class CubeTest {
         );
 
         for (int i = 0; i < trials; i++) {
-            int finalI = i;
+            int layer = i % size;
+            int side = i % 2 == 0 ? 2 : 4;
             executor.execute(() -> {
                 try {
-                    cube.rotate(finalI % 6, finalI % size);
+                    cube.rotate(side, layer);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -377,6 +398,6 @@ public class CubeTest {
         executor.awaitTermination(20, TimeUnit.SECONDS);
 
         long endTime = System.nanoTime();
-        assert(((endTime - startTime) / 1000000) < 5000);
+        assert(((endTime - startTime) / 1000000) < 8000);
     }
 }
