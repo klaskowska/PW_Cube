@@ -3,7 +3,6 @@ package concurrentcube;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -344,25 +343,6 @@ public class CubeTest {
         assertEquals(cubeString, cubePerfectString);
     }
 
-    @Test
-    public void testFastness1() throws InterruptedException {
-        int trials = 10000;
-        int size = 4000;
-        var counter = new Object() { int value = 0; };
-
-        Cube cube = new Cube(size,
-                (x, y) -> { ++counter.value; },
-                (x, y) -> { ++counter.value; },
-                () -> { ++counter.value; },
-                () -> { ++counter.value; }
-        );
-
-        for (int i = 0; i < trials; i++) {
-            int finalI = i;
-            cube.rotate(finalI % 6, finalI % size);
-        }
-    }
-
     // checks if operations on cube are executing concurrently:
     // executing time should be less than executing time sequentially
     // (I've picked constants - sequentially it takes about 8 sec)
@@ -399,5 +379,4 @@ public class CubeTest {
         long endTime = System.nanoTime();
         assert(((endTime - startTime) / 1000000) < 5000);
     }
-
 }

@@ -1,14 +1,8 @@
 package concurrentcube;
 
-import java.util.ArrayList;
-import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
-import static org.junit.Assert.assertEquals;
 
 public class Cube {
     // [side][row][column]
