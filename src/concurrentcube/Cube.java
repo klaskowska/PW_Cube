@@ -2,8 +2,13 @@ package concurrentcube;
 
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+
+import static org.junit.Assert.assertEquals;
 
 public class Cube {
     // [side][row][column]
@@ -260,7 +265,7 @@ public class Cube {
         }
     }
 
-    public void executeRotation(int side, int layer)  {
+    private void executeRotation(int side, int layer)  {
         if (layer == 0) {
             rightRotateSide(side);
         }
@@ -271,202 +276,72 @@ public class Cube {
         rotatePerimeterLayer(side, layer);
     }
 
-    // pomysl potem o zrobieniu tablicy na waitingi i na active'y zeby rotateAxis napisac tylko raz
-    public void rotateAxis0(int side, int layer) throws InterruptedException {
-        int uniqueSide = side < 3 ? side : oppositeSide(side);
-        int uniqueLayer = side < 3 ? layer : size - 1 - layer;
-
-        mutex.acquire();
-        if (waitingGroup[1] > 0 || waitingGroup[2] > 0 || waitingGroup[3] > 0 || activeGroup[1] > 0 || activeGroup[2] > 0
-                || activeGroup[3] > 0 || activeLayer[uniqueSide][uniqueLayer] > 0) {
-            waitingGroup[uniqueSide]++;
-            waitingLayer[uniqueSide][uniqueLayer]++;
-            mutex.release();
-            layerRotate[uniqueSide][uniqueLayer].acquire();
-            waitingGroup[uniqueSide]--;
-            waitingLayer[uniqueSide][uniqueLayer]--;
-        }
-
-        activeLayer[uniqueSide][uniqueLayer]++;
-        activeGroup[uniqueSide]++;
-        int i = 0;
-        while (i < size && (activeLayer[uniqueSide][i] > 0 || waitingLayer[uniqueSide][i] == 0))
-            i++;
-        if (i != size)
-            layerRotate[uniqueSide][i].release();
-        else
-            mutex.release();
-
-        beforeRotation.accept(side, layer);
-        executeRotation(side, layer);
-        afterRotation.accept(side, layer);
-
-        mutex.acquire();
-        activeGroup[uniqueSide]--;
-        activeLayer[uniqueSide][uniqueLayer]--;
-
-        if (activeGroup[uniqueSide] == 0) {
-            if (waitingGroup[1] > 0) {
-                i = 0;
-                while (i < size && waitingLayer[1][i] == 0)
-                    i++;
-                layerRotate[1][i].release();
-            }
-            else if (waitingGroup[2] > 0) {
-                i = 0;
-                while (i < size && waitingLayer[2][i] == 0)
-                    i++;
-                layerRotate[2][i].release();
-            }
-            else if (waitingGroup[3] > 0) {
-                printer.release();
-            }
-            else if (waitingLayer[uniqueSide][uniqueLayer] > 0) {
-                layerRotate[uniqueSide][uniqueLayer].release();
-            }
-            else {
-                mutex.release();
-            }
+    private void releaseGroup(int group) {
+        if (group < 3) {
+            int i = 0;
+            while (i < size && waitingLayer[group][i] == 0)
+                i++;
+            layerRotate[group][i].release();
         }
         else {
-            mutex.release();
-        }
-    }
-
-    public void rotateAxis1(int side, int layer) throws InterruptedException {
-        int uniqueSide = side < 3 ? side : oppositeSide(side);
-        int uniqueLayer = side < 3 ? layer : size - 1 - layer;
-
-        mutex.acquire();
-        if (waitingGroup[2] > 0 || waitingGroup[3] > 0 || waitingGroup[0] > 0 || activeGroup[2] > 0 || activeGroup[3] > 0
-                || activeGroup[0] > 0 || activeLayer[uniqueSide][uniqueLayer] > 0) {
-            waitingGroup[uniqueSide]++;
-            waitingLayer[uniqueSide][uniqueLayer]++;
-            mutex.release();
-            layerRotate[uniqueSide][uniqueLayer].acquire();
-            waitingGroup[uniqueSide]--;
-            waitingLayer[uniqueSide][uniqueLayer]--;
-        }
-
-        activeLayer[uniqueSide][uniqueLayer]++;
-        activeGroup[uniqueSide]++;
-        int i = 0;
-        while (i < size && (activeLayer[uniqueSide][i] > 0 || waitingLayer[uniqueSide][i] == 0))
-            i++;
-        if (i != size)
-            layerRotate[uniqueSide][i].release();
-        else
-            mutex.release();
-
-        beforeRotation.accept(side, layer);
-        executeRotation(side, layer);
-        afterRotation.accept(side, layer);
-
-        mutex.acquire();
-        activeGroup[uniqueSide]--;
-        activeLayer[uniqueSide][uniqueLayer]--;
-
-        if (activeGroup[uniqueSide] == 0) {
-            if (waitingGroup[2] > 0) {
-                i = 0;
-                while (i < size && waitingLayer[2][i] == 0)
-                    i++;
-                layerRotate[2][i].release();
-            }
-            else if (waitingGroup[3] > 0) {
-                printer.release();
-            }
-            else if (waitingGroup[0] > 0) {
-                i = 0;
-                while (i < size && waitingLayer[0][i] == 0)
-                    i++;
-                layerRotate[0][i].release();
-            }
-            else if (waitingLayer[uniqueSide][uniqueLayer] > 0) {
-                layerRotate[uniqueSide][uniqueLayer].release();
-            }
-            else {
-                mutex.release();
-            }
-        }
-        else {
-            mutex.release();
-        }
-    }
-
-    public void rotateAxis2(int side, int layer) throws InterruptedException {
-        int uniqueSide = side < 3 ? side : oppositeSide(side);
-        int uniqueLayer = side < 3 ? layer : size - 1 - layer;
-
-        mutex.acquire();
-        if (waitingGroup[3] > 0 || waitingGroup[0] > 0 || waitingGroup[1] > 0 || activeGroup[3] > 0 || activeGroup[0] > 0
-                || activeGroup[1] > 0 || activeLayer[uniqueSide][uniqueLayer] > 0) {
-            waitingGroup[uniqueSide]++;
-            waitingLayer[uniqueSide][uniqueLayer]++;
-            mutex.release();
-            layerRotate[uniqueSide][uniqueLayer].acquire();
-            waitingGroup[uniqueSide]--;
-            waitingLayer[uniqueSide][uniqueLayer]--;
-        }
-
-        activeLayer[uniqueSide][uniqueLayer]++;
-        activeGroup[uniqueSide]++;
-        int i = 0;
-        while (i < size && (activeLayer[uniqueSide][i] > 0 || waitingLayer[uniqueSide][i] == 0))
-            i++;
-        if (i != size)
-            layerRotate[uniqueSide][i].release();
-        else
-            mutex.release();
-
-        beforeRotation.accept(side, layer);
-        executeRotation(side, layer);
-        afterRotation.accept(side, layer);
-
-        mutex.acquire();
-        activeGroup[uniqueSide]--;
-        activeLayer[uniqueSide][uniqueLayer]--;
-
-        if (activeGroup[uniqueSide] == 0) {
-            if (waitingGroup[3] > 0) {
-                printer.release();
-            }
-            else if (waitingGroup[0] > 0) {
-                i = 0;
-                while (i < size && waitingLayer[0][i] == 0)
-                    i++;
-                layerRotate[0][i].release();
-            }
-            else if (waitingGroup[1] > 0) {
-                i = 0;
-                while (i < size && waitingLayer[1][i] == 0)
-                    i++;
-                layerRotate[1][i].release();
-            }
-            else if (waitingLayer[uniqueSide][uniqueLayer] > 0) {
-                layerRotate[uniqueSide][uniqueLayer].release();
-            }
-            else {
-                mutex.release();
-            }
-        }
-        else {
-            mutex.release();
+            printer.release();
         }
     }
 
     // waits till rotating is possible, then rotates the cube
     public void rotate(int side, int layer) throws InterruptedException {
-        if (side == 0 || side == 5)
-            rotateAxis0(side, layer);
-        else if (side == 1 || side == 3)
-            rotateAxis1(side, layer);
-        else
-            rotateAxis2(side, layer);
+        int uniqueSide = side < 3 ? side : oppositeSide(side);
+        int uniqueLayer = side < 3 ? layer : size - 1 - layer;
 
+        mutex.acquire();
+        if (waitingGroup[(uniqueSide + 1) % 4] > 0 || waitingGroup[(uniqueSide + 2) % 4] > 0 ||
+                waitingGroup[(uniqueSide + 3) % 4] > 0 || activeGroup[(uniqueSide + 1) % 4] > 0 ||
+                activeGroup[(uniqueSide + 2) % 4] > 0 || activeGroup[(uniqueSide + 3) % 4] > 0 ||
+                activeLayer[uniqueSide][uniqueLayer] > 0) {
+            waitingGroup[uniqueSide]++;
+            waitingLayer[uniqueSide][uniqueLayer]++;
+            mutex.release();
+            layerRotate[uniqueSide][uniqueLayer].acquire();
+            waitingGroup[uniqueSide]--;
+            waitingLayer[uniqueSide][uniqueLayer]--;
+        }
+
+        activeLayer[uniqueSide][uniqueLayer]++;
+        activeGroup[uniqueSide]++;
+        int i = 0;
+        while (i < size && (activeLayer[uniqueSide][i] > 0 || waitingLayer[uniqueSide][i] == 0))
+            i++;
+        if (i != size)
+            layerRotate[uniqueSide][i].release();
+        else
+            mutex.release();
+
+        beforeRotation.accept(side, layer);
+        executeRotation(side, layer);
+        afterRotation.accept(side, layer);
+
+        mutex.acquire();
+        activeGroup[uniqueSide]--;
+        activeLayer[uniqueSide][uniqueLayer]--;
+
+        if (activeGroup[uniqueSide] == 0) {
+            if (waitingGroup[(uniqueSide + 1) % 4] > 0)
+                releaseGroup((uniqueSide + 1) % 4);
+            else if (waitingGroup[(uniqueSide + 2) % 4] > 0)
+                releaseGroup((uniqueSide + 2) % 4);
+            else if (waitingGroup[(uniqueSide + 3) % 4] > 0)
+                releaseGroup((uniqueSide + 3) % 4);
+            else if (waitingGroup[uniqueSide] > 0)
+                releaseGroup(uniqueSide);
+            else
+                mutex.release();
+        }
+        else {
+            mutex.release();
+        }
     }
 
-    public String executeShowing() {
+    private String executeShowing() {
         StringBuffer sb = new StringBuffer();
         for (int side = 0; side < 6; side++) {
             for (int row = 0; row < size; row++) {
@@ -513,12 +388,12 @@ public class Cube {
                 i++;
             layerRotate[2][i].release();
         }
+        else if (waitingGroup[3] > 0) {
+            releaseGroup(3);
+        }
         else {
             mutex.release();
         }
         return result;
-    }
-
-    public static void main(String[] args) throws InterruptedException {
     }
 }
